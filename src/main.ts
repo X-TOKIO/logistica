@@ -10,7 +10,15 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   app.enableCors({
-    origin: configService.get<string>('FRONTEND_URL') || true,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const allowed = configService.get<string>('FRONTEND_URL') || '';
+      if (!allowed || origin === allowed || origin.endsWith('.vercel.app') || origin.includes('localhost')) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS: origen no permitido'));
+      }
+    },
     credentials: true,
   });
   app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });
