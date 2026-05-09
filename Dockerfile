@@ -5,7 +5,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN chmod +x ./node_modules/.bin/nest && npm run build
 
 FROM node:22-alpine
 WORKDIR /app
