@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { join } from 'path';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -22,16 +23,17 @@ import { CommonModule } from './common/common.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST', 'localhost'),
-        port: configService.get<number>('DB_PORT', 5432),
-        username: configService.get<string>('DB_USER', 'postgres'),
-        password: configService.get<string>('DB_PASSWORD', ''),
-        database: configService.get<string>('DB_NAME', 'logistica'),
-        autoLoadEntities: true, 
-        synchronize: true, 
-      }),
+      useFactory: (configService: ConfigService) => {
+        const isProduction = configService.get<string>('NODE_ENV') === 'production';
+        return {
+          type: 'postgres',
+          url: configService.get<string>('DATABASE_URL'),
+          autoLoadEntities: true,
+          synchronize: !isProduction,
+          migrationsRun: isProduction,
+          migrations: [join(__dirname, 'migrations', '*.js')],
+        };
+      },
     }),
     CommonModule,
     AuthModule,
