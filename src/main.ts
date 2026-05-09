@@ -9,20 +9,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
 
-  const allowedOrigins = [
-    configService.get<string>('FRONTEND_URL') || '',
-    'http://localhost:5173',
-    'http://localhost:4173',
-  ].filter(Boolean);
-
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS no permitido: ' + origin));
-      }
-    },
+    origin: configService.get<string>('FRONTEND_URL') || true,
     credentials: true,
   });
   app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });
