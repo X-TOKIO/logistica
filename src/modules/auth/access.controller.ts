@@ -8,7 +8,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 @RequirePermissions('MODULO_USUARIOS', 'MODULO_SEGURIDAD')
 @Controller('access')
 export class AccessController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Get('users')
   getUsers() {
@@ -28,7 +28,7 @@ export class AccessController {
   @Post('assign')
   assignRole(@Body() body: { ID_Usuario: number, ID_Rol: number, ID_Permiso: number }) {
     if (!body.ID_Usuario || !body.ID_Rol || !body.ID_Permiso) {
-        throw new Error('Faltan relaciones lógicas de la llave compuesta');
+      throw new Error('Faltan relaciones lógicas de la llave compuesta');
     }
     return this.authService.assignRoleAccess(body.ID_Usuario, body.ID_Rol, body.ID_Permiso);
   }
@@ -36,7 +36,7 @@ export class AccessController {
   @Post('assign-multiple')
   assignMultiple(@Body() body: { ID_Usuario: number, ID_Rol: number, ID_Permisos: number[] }) {
     if (!body.ID_Usuario || !body.ID_Rol || !body.ID_Permisos?.length) {
-        throw new Error('Faltan relaciones lógicas para asignación masiva');
+      throw new Error('Faltan relaciones lógicas para asignación masiva');
     }
     return this.authService.assignMultipleAccess(body.ID_Usuario, body.ID_Rol, body.ID_Permisos);
   }
@@ -54,7 +54,7 @@ export class AccessController {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Controller separado para /roles  (CRUD completo)
+// Controller separado para /roles  
 // ─────────────────────────────────────────────────────────────
 import { Controller as NestController } from '@nestjs/common';
 
@@ -62,7 +62,7 @@ import { Controller as NestController } from '@nestjs/common';
 @RequirePermissions('MODULO_SEGURIDAD', 'MODULO_RRHH')
 @Controller('roles')
 export class RolesController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @RequirePermissions('MODULO_SEGURIDAD', 'MODULO_RRHH', 'MODULO_USUARIOS')
   @Get()
@@ -109,7 +109,7 @@ export class RolesController {
 @RequirePermissions('MODULO_SEGURIDAD', 'MODULO_RRHH', 'MODULO_USUARIOS')
 @Controller('permisos')
 export class PermisosController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Get()
   getAll() {

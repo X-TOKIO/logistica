@@ -380,6 +380,38 @@ export class InventoryService implements OnApplicationBootstrap {
     }
   }
 
+  // ── getStockReport ────────────────────────────────────────────────────────────
+
+  async getStockReport() {
+    const rows = await this.dataSource
+      .getRepository(ProductoAlmacen)
+      .createQueryBuilder('pa')
+      .leftJoinAndSelect('pa.producto', 'producto')
+      .leftJoinAndSelect('producto.categoria', 'categoria')
+      .leftJoinAndSelect('pa.almacen', 'almacen')
+      .where('pa.deleted_at IS NULL')
+      .andWhere('pa.Stock_Actual > 0')
+      .orderBy('pa.Stock_Actual', 'DESC')
+      .getMany();
+
+    return rows.map(pa => ({
+      ID_Producto: pa.ID_Producto,
+      ID_Almacen:  pa.ID_Almacen,
+      Stock_Actual: Number(pa.Stock_Actual),
+      producto: {
+        Nombre:        pa.producto?.Nombre         ?? '—',
+        CodigoBarra:   pa.producto?.CodigoBarra     ?? '',
+        PrecioUnitario: Number(pa.producto?.PrecioUnitario ?? 0),
+        ID_Categoria:  pa.producto?.ID_Categoria   ?? null,
+        categoria:     pa.producto?.categoria?.NombreC ?? '—',
+      },
+      almacen: {
+        Nombre: pa.almacen?.Nombre ?? '—',
+      },
+      valorTotal: Number(pa.Stock_Actual) * Number(pa.producto?.PrecioUnitario ?? 0),
+    }));
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
   private horaActual(date: Date): string {

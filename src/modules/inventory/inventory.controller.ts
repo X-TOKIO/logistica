@@ -13,6 +13,10 @@ import { CreateMermaDto } from './dto/create-merma.dto';
 export class InventoryController {
   constructor(private readonly invService: InventoryService) {}
 
+  @RequirePermissions('MODULO_INVENTARIO', 'MODULO_REPORTES')
+  @Get('reportes/stock')
+  getStockReport() { return this.invService.getStockReport(); }
+
   @Get('ingresos')
   getIngresos() { return this.invService.getIngresos(); }
 

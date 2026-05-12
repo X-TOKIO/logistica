@@ -220,6 +220,10 @@ export class PaymentsController {
   // ── Estadísticas ─────────────────────────────────────────────────────────
 
   @RequirePermissions('MODULO_FINANZAS', 'MODULO_REPORTES')
+  @Get('estadisticas/finanzas')
+  getEstadisticasFinanzas() { return this.srv.getEstadisticasFinanzas(); }
+
+  @RequirePermissions('MODULO_FINANZAS', 'MODULO_REPORTES')
   @Get('estadisticas')
   getEstadisticas() { return this.srv.getEstadisticas(); }
 }

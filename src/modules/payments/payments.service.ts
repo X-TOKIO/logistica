@@ -96,7 +96,7 @@ export class PaymentsService implements OnApplicationBootstrap {
 
   getCompras() {
     return this.notaRepo.find({
-      relations: ['proveedor', 'empleado', 'almacen'],
+      relations: ['proveedor', 'empleado', 'almacen', 'detalles', 'detalles.producto'],
       order: { ID_Compra: 'DESC' },
     });
   }
@@ -614,6 +614,109 @@ export class PaymentsService implements OnApplicationBootstrap {
     if (!cuota) throw new BadRequestException('Cuota no existe');
     cuota.Estado = 'PAGADO';
     return this.planRepo.save(cuota);
+  }
+
+  // ── Estadísticas Finanzas ─────────────────────────────────────────────────
+
+  async getEstadisticasFinanzas() {
+    const manager = this.notaRepo.manager;
+    const hoy = new Date().toISOString().split('T')[0];
+    const en30Dias = new Date(Date.now() + 30 * 86_400_000).toISOString().split('T')[0];
+
+    const [comprasPorMes, topProveedoresCompra, topProductos, condicionPago,
+           metodosPago, deudaPorProveedor, estadoCxP, cuotasVencidas, cuotasProximas] =
+      await Promise.all([
+        manager.query(`
+          SELECT TO_CHAR("Fecha_Emision", 'YYYY-MM') as mes,
+                 CAST(COUNT(*) AS INTEGER) as cantidad,
+                 COALESCE(SUM("Monto_Total"), 0) as total
+          FROM "NotaCompra"
+          WHERE "Estado_Documento" != 'ANULADO' AND "Fecha_Emision" IS NOT NULL
+          GROUP BY TO_CHAR("Fecha_Emision", 'YYYY-MM')
+          ORDER BY mes ASC
+          LIMIT 12
+        `),
+        manager.query(`
+          SELECT p."Nombre_RazonSocial" as nombre,
+                 CAST(COUNT(nc."ID_Compra") AS INTEGER) as cantidad,
+                 COALESCE(SUM(nc."Monto_Total"), 0) as total
+          FROM "NotaCompra" nc
+          JOIN "Proveedor" p ON p."ID_Proveedor" = nc."ID_Proveedor"
+          WHERE nc."Estado_Documento" != 'ANULADO'
+          GROUP BY p."Nombre_RazonSocial", p."ID_Proveedor"
+          ORDER BY total DESC
+          LIMIT 8
+        `),
+        manager.query(`
+          SELECT pr."Nombre" as nombre,
+                 CAST(SUM(dc."Cantidad") AS INTEGER) as cantidad,
+                 COALESCE(SUM(dc."Subtotal"), 0) as total
+          FROM "DetalleCompra" dc
+          JOIN "Producto" pr ON pr."ID_Producto" = dc."ID_Producto"
+          JOIN "NotaCompra" nc ON nc."ID_Compra" = dc."ID_Compra"
+          WHERE nc."Estado_Documento" != 'ANULADO'
+          GROUP BY pr."Nombre", pr."ID_Producto"
+          ORDER BY cantidad DESC
+          LIMIT 8
+        `),
+        manager.query(`
+          SELECT "Condicion_Pago" as condicion,
+                 CAST(COUNT(*) AS INTEGER) as cantidad,
+                 COALESCE(SUM("Monto_Total"), 0) as total
+          FROM "NotaCompra"
+          WHERE "Estado_Documento" != 'ANULADO'
+          GROUP BY "Condicion_Pago"
+        `),
+        manager.query(`
+          SELECT "Metodo_Pago" as metodo,
+                 CAST(COUNT(*) AS INTEGER) as cantidad,
+                 COALESCE(SUM("Monto_Pagado"), 0) as total
+          FROM "Pago"
+          WHERE "Metodo_Pago" IS NOT NULL
+          GROUP BY "Metodo_Pago"
+        `),
+        manager.query(`
+          SELECT p."Nombre_RazonSocial" as nombre,
+                 CAST(COUNT(cxp."ID_Cuenta") AS INTEGER) as cuentas,
+                 COALESCE(SUM(cxp."Saldo_Pendiente"), 0) as deuda
+          FROM "CuentaPorPagar" cxp
+          JOIN "NotaCompra" nc ON nc."ID_Compra" = cxp."ID_Compra"
+          JOIN "Proveedor" p ON p."ID_Proveedor" = nc."ID_Proveedor"
+          WHERE cxp."Estado_Pago" IN ('PENDIENTE', 'PARCIAL')
+          GROUP BY p."Nombre_RazonSocial", p."ID_Proveedor"
+          ORDER BY deuda DESC
+          LIMIT 8
+        `),
+        manager.query(`
+          SELECT "Estado_Pago" as estado,
+                 CAST(COUNT(*) AS INTEGER) as cantidad,
+                 COALESCE(SUM("Saldo_Pendiente"), 0) as total
+          FROM "CuentaPorPagar"
+          GROUP BY "Estado_Pago"
+        `),
+        manager.query(`
+          SELECT CAST(COUNT(*) AS INTEGER) as cantidad, COALESCE(SUM("Monto"), 0) as total
+          FROM "CuotaCxP"
+          WHERE "Estado" = 'PENDIENTE' AND "Fecha_Vencimiento" < $1
+        `, [hoy]),
+        manager.query(`
+          SELECT CAST(COUNT(*) AS INTEGER) as cantidad, COALESCE(SUM("Monto"), 0) as total
+          FROM "CuotaCxP"
+          WHERE "Estado" = 'PENDIENTE' AND "Fecha_Vencimiento" >= $1 AND "Fecha_Vencimiento" <= $2
+        `, [hoy, en30Dias]),
+      ]);
+
+    return {
+      comprasPorMes:    comprasPorMes.map((r: any)    => ({ mes: r.mes, cantidad: +r.cantidad, total: parseFloat(r.total) })),
+      topProveedores:   topProveedoresCompra.map((r: any) => ({ nombre: r.nombre, cantidad: +r.cantidad, total: parseFloat(r.total) })),
+      topProductos:     topProductos.map((r: any)     => ({ nombre: r.nombre, cantidad: +r.cantidad, total: parseFloat(r.total) })),
+      condicionPago:    condicionPago.map((r: any)    => ({ condicion: r.condicion, cantidad: +r.cantidad, total: parseFloat(r.total) })),
+      metodosPago:      metodosPago.map((r: any)      => ({ metodo: r.metodo, cantidad: +r.cantidad, total: parseFloat(r.total) })),
+      deudaPorProveedor: deudaPorProveedor.map((r: any) => ({ nombre: r.nombre, cuentas: +r.cuentas, deuda: parseFloat(r.deuda) })),
+      estadoCxP:        estadoCxP.map((r: any)        => ({ estado: r.estado, cantidad: +r.cantidad, total: parseFloat(r.total) })),
+      cuotasVencidas:   { cantidad: +cuotasVencidas[0]?.cantidad || 0, total: parseFloat(cuotasVencidas[0]?.total || 0) },
+      cuotasProximas:   { cantidad: +cuotasProximas[0]?.cantidad || 0, total: parseFloat(cuotasProximas[0]?.total || 0) },
+    };
   }
 
   // ── Estadísticas ──────────────────────────────────────────────────────────
