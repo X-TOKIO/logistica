@@ -37,14 +37,7 @@ export class MailController {
 
   @Get('config')
   async getConfig() {
-    const cfg = await this.mailSrv.getConfig();
-    if (!cfg) return { host: '', port: 25565, usuario: '', passwordSet: false };
-    return {
-      host: cfg.Host,
-      port: cfg.Port,
-      usuario: cfg.Usuario,
-      passwordSet: !!cfg.Password,
-    };
+    return this.mailSrv.getActiveConfig();
   }
 
   @Post('config')

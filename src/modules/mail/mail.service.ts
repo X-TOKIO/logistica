@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 // @ts-ignore
 import PDFDocument from 'pdfkit-table';
@@ -15,10 +16,45 @@ export class MailService {
     @InjectRepository(CorreoEnviado) private correoRepo: Repository<CorreoEnviado>,
     @InjectRepository(ConfiguracionCorreo) private configRepo: Repository<ConfiguracionCorreo>,
     @InjectRepository(Usuario) private usrRepo: Repository<Usuario>,
+    private configService: ConfigService,
   ) {}
+
+  // Resuelve la config SMTP: env vars tienen prioridad sobre la BD
+  private async resolveSmtpConfig() {
+    const envHost = this.configService.get<string>('MAIL_HOST');
+    if (envHost) {
+      return {
+        host: envHost,
+        port: Number(this.configService.get<string>('MAIL_PORT') || 587),
+        user: this.configService.get<string>('MAIL_USERNAME') || this.configService.get<string>('MAIL_USER'),
+        pass: this.configService.get<string>('MAIL_PASSWORD') || this.configService.get<string>('MAIL_PASS'),
+        fromEnv: true,
+      };
+    }
+    const cfg = await this.configRepo.findOne({ where: {} });
+    if (!cfg?.Host) return null;
+    return {
+      host: cfg.Host,
+      port: cfg.Port || 25565,
+      user: cfg.Usuario,
+      pass: cfg.Password,
+      fromEnv: false,
+    };
+  }
 
   async getConfig(): Promise<ConfiguracionCorreo | null> {
     return this.configRepo.findOne({ where: {} });
+  }
+
+  async getActiveConfig() {
+    const smtp = await this.resolveSmtpConfig();
+    return {
+      host: smtp?.host || '',
+      port: smtp?.port || 25565,
+      usuario: smtp?.user || '',
+      passwordSet: !!(smtp?.pass),
+      fromEnv: smtp?.fromEnv || false,
+    };
   }
 
   async saveConfig(dto: { host: string; port: number; usuario: string; password: string }): Promise<ConfiguracionCorreo> {
@@ -32,16 +68,16 @@ export class MailService {
   }
 
   private async buildTransporter(): Promise<nodemailer.Transporter> {
-    const cfg = await this.configRepo.findOne({ where: {} });
-    if (!cfg || !cfg.Host) {
+    const smtp = await this.resolveSmtpConfig();
+    if (!smtp) {
       throw new BadRequestException(
-        'Servidor de correo no configurado. Ve a Inteligencia de Negocios → Correo y guarda al menos el Host y Puerto.',
+        'Servidor de correo no configurado. Define MAIL_HOST en las variables de entorno o ve a Inteligencia de Negocios → Correo.',
       );
     }
 
     const transportOptions: any = {
-      host: cfg.Host,
-      port: cfg.Port || 25565,
+      host: smtp.host,
+      port: smtp.port,
       secure: false,
       tls: { rejectUnauthorized: false },
       connectionTimeout: 60000,
@@ -49,9 +85,8 @@ export class MailService {
       socketTimeout:    120000,
     };
 
-    // Solo agregar auth si el usuario proporcionó credenciales
-    if (cfg.Usuario && cfg.Password) {
-      transportOptions.auth = { user: cfg.Usuario, pass: cfg.Password };
+    if (smtp.user && smtp.pass) {
+      transportOptions.auth = { user: smtp.user, pass: smtp.pass };
     }
 
     return nodemailer.createTransport(transportOptions);
@@ -255,8 +290,8 @@ export class MailService {
       ? mensajePersonalizado.trim()
       : `A continuación se adjunta el informe renderizado directamente desde el engranaje del Backend Node.js para: ${reportType}.`;
 
-    const cfg = await this.configRepo.findOne({ where: {} });
-    const remitente = cfg?.Usuario || 'noreply@paradiso.local';
+    const smtp = await this.resolveSmtpConfig();
+    const remitente = smtp?.user || 'noreply@paradiso.local';
 
     const transporter = await this.buildTransporter();
 
