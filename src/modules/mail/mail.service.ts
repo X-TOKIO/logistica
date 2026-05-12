@@ -33,27 +33,47 @@ export class MailService {
 
   private async buildTransporter(): Promise<nodemailer.Transporter> {
     const cfg = await this.configRepo.findOne({ where: {} });
-    if (!cfg || !cfg.Host || !cfg.Usuario || !cfg.Password) {
+    if (!cfg || !cfg.Host) {
       throw new BadRequestException(
-        'Servidor de correo no configurado. Configure el Host, Puerto, Usuario y Contraseña en Inteligencia de Negocios antes de enviar reportes.',
+        'Servidor de correo no configurado. Ve a Inteligencia de Negocios → Correo y guarda al menos el Host y Puerto.',
       );
     }
-    return nodemailer.createTransport({
+
+    const transportOptions: any = {
       host: cfg.Host,
       port: cfg.Port || 25565,
       secure: false,
-      auth: { user: cfg.Usuario, pass: cfg.Password },
       tls: { rejectUnauthorized: false },
-    });
+      connectionTimeout: 60000,
+      greetingTimeout:   60000,
+      socketTimeout:    120000,
+    };
+
+    // Solo agregar auth si el usuario proporcionó credenciales
+    if (cfg.Usuario && cfg.Password) {
+      transportOptions.auth = { user: cfg.Usuario, pass: cfg.Password };
+    }
+
+    return nodemailer.createTransport(transportOptions);
   }
 
   async testConnection(): Promise<{ ok: boolean; message: string }> {
     try {
       const transporter = await this.buildTransporter();
       await transporter.verify();
-      return { ok: true, message: 'Conexión SMTP establecida correctamente.' };
+      return { ok: true, message: 'Conexión SMTP establecida correctamente con el servidor privado.' };
     } catch (err: any) {
-      return { ok: false, message: `Error de conexión: ${err.message}` };
+      const msg: string = err.message || '';
+      let hint = msg;
+      if (msg.includes('Greeting never received'))
+        hint = 'Sin saludo SMTP (Greeting never received). Posibles causas: (1) Postfix no está corriendo en el servidor Linux; (2) el túnel TCP no apunta al puerto 25 de Postfix; (3) el servidor tardó demasiado — reintenta.';
+      else if (msg.includes('ECONNREFUSED'))
+        hint = 'Conexión rechazada — verifica que el túnel esté activo y el puerto sea correcto.';
+      else if (msg.includes('ETIMEDOUT') || msg.includes('timeout'))
+        hint = 'Timeout de conexión — el túnel puede estar caído o saturado. Reintenta en unos segundos.';
+      else if (msg.includes('535') || msg.includes('Authentication'))
+        hint = `Autenticación SMTP rechazada — verifica usuario y contraseña. Detalle: ${msg}`;
+      return { ok: false, message: hint };
     }
   }
 

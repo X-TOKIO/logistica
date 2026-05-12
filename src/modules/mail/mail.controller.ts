@@ -51,8 +51,8 @@ export class MailController {
   async saveConfig(
     @Body() body: { host: string; port: number; usuario: string; password?: string },
   ) {
-    if (!body.host || !body.usuario) {
-      throw new BadRequestException('Host y Usuario son obligatorios.');
+    if (!body.host) {
+      throw new BadRequestException('El Host SMTP es obligatorio.');
     }
     await this.mailSrv.saveConfig({
       host: body.host,
