@@ -80,9 +80,11 @@ export class MailService {
       port: smtp.port,
       secure: false,
       tls: { rejectUnauthorized: false },
-      connectionTimeout: 60000,
-      greetingTimeout:   60000,
+      connectionTimeout: 15000,
+      greetingTimeout:   15000,
       socketTimeout:    120000,
+      logger: true,
+      debug: true,
     };
 
     if (smtp.user && smtp.pass) {
