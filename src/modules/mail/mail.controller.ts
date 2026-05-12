@@ -17,6 +17,8 @@ import { Repository } from 'typeorm';
 import { Producto } from '../warehouse/entities/producto.entity';
 import { PlanPago } from '../payments/entities/plan-pago.entity';
 import { Despacho } from '../logistics/entities/despacho.entity';
+import { NotaCompra } from '../payments/entities/nota-compra.entity';
+import { Proveedor } from '../payments/entities/proveedor.entity';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @RequirePermissions('MODULO_REPORTES')
@@ -24,9 +26,11 @@ import { Despacho } from '../logistics/entities/despacho.entity';
 export class MailController {
   constructor(
     private readonly mailSrv: MailService,
-    @InjectRepository(Producto) private prodRepo: Repository<Producto>,
-    @InjectRepository(PlanPago) private planRepo: Repository<PlanPago>,
-    @InjectRepository(Despacho) private despRepo: Repository<Despacho>,
+    @InjectRepository(Producto)   private prodRepo:     Repository<Producto>,
+    @InjectRepository(PlanPago)   private planRepo:     Repository<PlanPago>,
+    @InjectRepository(Despacho)   private despRepo:     Repository<Despacho>,
+    @InjectRepository(NotaCompra) private compraRepo:   Repository<NotaCompra>,
+    @InjectRepository(Proveedor)  private provRepo:     Repository<Proveedor>,
   ) {}
 
   // ── Configuración SMTP ───────────────────────────────────────────────────────
@@ -112,6 +116,27 @@ export class MailController {
         JOIN "Sucursal" s ON s."ID_Sucursal" = r."ID_Sucursal"
       `);
       pdfBuffer = await this.mailSrv.buildPdfDespachos(joinedRows);
+    } else if (body.reportType === 'COMPRAS') {
+      const rows = await this.compraRepo.manager.query(`
+        SELECT nc."ID_Compra" as id, nc."Fecha_Emision" as fecha,
+               prov."Nombre_RazonSocial" as proveedor,
+               nc."Condicion_Pago" as condicion,
+               nc."Monto_Total" as monto,
+               nc."Estado_Documento" as estado
+        FROM "NotaCompra" nc
+        LEFT JOIN "Proveedor" prov ON prov."ID_Proveedor" = nc."ID_Proveedor"
+        ORDER BY nc."Fecha_Emision" DESC
+        LIMIT 200
+      `);
+      pdfBuffer = await this.mailSrv.buildPdfCompras(rows);
+    } else if (body.reportType === 'PROVEEDORES') {
+      const rows = await this.provRepo.manager.query(`
+        SELECT "ID_Proveedor" as id, "Nombre_RazonSocial" as nombre,
+               "NIT" as nit, "Telefono" as telefono, "Estado" as estado
+        FROM "Proveedor"
+        ORDER BY "Nombre_RazonSocial"
+      `);
+      pdfBuffer = await this.mailSrv.buildPdfProveedores(rows);
     } else {
       throw new BadRequestException('Tipo de Reporte Solicitado es Inválido.');
     }

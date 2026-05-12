@@ -156,6 +156,67 @@ export class MailService {
     });
   }
 
+  async buildPdfCompras(compras: any[]): Promise<Buffer> {
+    return new Promise((resolve) => {
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      const buffers: any[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      doc.fontSize(20).text('PARADISO FINANCES', { align: 'center' }).moveDown();
+      doc.fontSize(14).text('Historial de Órdenes de Compra', { align: 'center' }).moveDown();
+
+      const table = {
+        title: 'Compras Registradas',
+        headers: ['Compra_ID', 'Fecha', 'Proveedor', 'Condición', 'Monto Total', 'Estado'],
+        rows: compras.map((c) => [
+          c.id.toString(),
+          c.fecha ? new Date(c.fecha).toLocaleDateString() : '—',
+          c.proveedor || '—',
+          c.condicion || '—',
+          `Bs. ${parseFloat(c.monto || 0).toFixed(2)}`,
+          c.estado || '—',
+        ]),
+      };
+
+      doc.table(table, {
+        prepareHeader: () => doc.font('Helvetica-Bold').fontSize(9),
+        prepareRow: () => doc.font('Helvetica').fillColor('black').fontSize(9),
+      });
+      doc.end();
+    });
+  }
+
+  async buildPdfProveedores(proveedores: any[]): Promise<Buffer> {
+    return new Promise((resolve) => {
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      const buffers: any[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      doc.fontSize(20).text('PARADISO FINANCES', { align: 'center' }).moveDown();
+      doc.fontSize(14).text('Directorio de Proveedores Registrados', { align: 'center' }).moveDown();
+
+      const table = {
+        title: 'Proveedores Activos',
+        headers: ['ID', 'Razón Social', 'NIT', 'Teléfono', 'Estado'],
+        rows: proveedores.map((p) => [
+          p.id.toString(),
+          p.nombre || '—',
+          p.nit || '—',
+          p.telefono || '—',
+          p.estado || '—',
+        ]),
+      };
+
+      doc.table(table, {
+        prepareHeader: () => doc.font('Helvetica-Bold').fontSize(9),
+        prepareRow: () => doc.font('Helvetica').fillColor('black').fontSize(9),
+      });
+      doc.end();
+    });
+  }
+
   async sendReport(
     userId: number,
     email: string,
