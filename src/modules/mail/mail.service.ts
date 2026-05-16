@@ -35,7 +35,7 @@ export class MailService {
     if (!cfg?.Host) return null;
     return {
       host: cfg.Host,
-      port: cfg.Port || 25565,
+      port: cfg.Port || 25,
       user: cfg.Usuario,
       pass: cfg.Password,
       fromEnv: false,
@@ -50,7 +50,7 @@ export class MailService {
     const smtp = await this.resolveSmtpConfig();
     return {
       host: smtp?.host || '',
-      port: smtp?.port || 25565,
+      port: smtp?.port || 25,
       usuario: smtp?.user || '',
       passwordSet: !!(smtp?.pass),
       fromEnv: smtp?.fromEnv || false,
@@ -103,11 +103,11 @@ export class MailService {
       const msg: string = err.message || '';
       let hint = msg;
       if (msg.includes('Greeting never received'))
-        hint = 'Sin saludo SMTP (Greeting never received). Posibles causas: (1) Postfix no está corriendo en el servidor Linux; (2) el túnel TCP no apunta al puerto 25 de Postfix; (3) el servidor tardó demasiado — reintenta.';
+        hint = 'Sin saludo SMTP (Greeting never received). Posibles causas: (1) el servidor de correo no está activo; (2) el puerto 25 está bloqueado por firewall; (3) el servidor tardó demasiado — reintenta.';
       else if (msg.includes('ECONNREFUSED'))
-        hint = 'Conexión rechazada — verifica que el túnel esté activo y el puerto sea correcto.';
+        hint = 'Conexión rechazada (ECONNREFUSED) — verifica que el servidor SMTP esté activo y el puerto sea accesible.';
       else if (msg.includes('ETIMEDOUT') || msg.includes('timeout'))
-        hint = 'Timeout de conexión — el túnel puede estar caído o saturado. Reintenta en unos segundos.';
+        hint = 'Timeout de conexión — el servidor no respondió a tiempo. Verifica conectividad y que el puerto 25 esté abierto en el VPS.';
       else if (msg.includes('535') || msg.includes('Authentication'))
         hint = `Autenticación SMTP rechazada — verifica usuario y contraseña. Detalle: ${msg}`;
       return { ok: false, message: hint };
