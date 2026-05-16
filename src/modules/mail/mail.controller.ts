@@ -130,6 +130,49 @@ export class MailController {
         ORDER BY "Nombre_RazonSocial"
       `);
       pdfBuffer = await this.mailSrv.buildPdfProveedores(rows);
+    } else if (body.reportType === 'MERMAS') {
+      const rows = await this.prodRepo.manager.query(`
+        SELECT m."ID_Merma" as id, m."Fecha" as fecha, m."MotivoPerdida" as motivo,
+               p."Nombre" as producto, dm."Cantidad" as cantidad,
+               p."PrecioUnitario" as precio
+        FROM "Mermas" m
+        JOIN "DetalleMerma" dm ON dm."ID_Merma" = m."ID_Merma"
+        JOIN "Producto" p ON p."ID_Producto" = dm."ID_Producto"
+        WHERE m.deleted_at IS NULL
+        ORDER BY m."Fecha" DESC
+        LIMIT 500
+      `);
+      pdfBuffer = await this.mailSrv.buildPdfMermas(rows);
+    } else if (body.reportType === 'INGRESOS') {
+      const rows = await this.prodRepo.manager.query(`
+        SELECT ni."ID_Ingreso" as id, ni."Fecha" as fecha,
+               prov."Nombre_RazonSocial" as proveedor,
+               p."Nombre" as producto, di."Cantidad" as cantidad,
+               p."PrecioUnitario" as precio
+        FROM "NotaIngreso" ni
+        JOIN "DetalleIngreso" di ON di."ID_Ingreso" = ni."ID_Ingreso"
+        JOIN "Producto" p ON p."ID_Producto" = di."ID_Producto"
+        LEFT JOIN "NotaCompra" nc ON nc."ID_Compra" = ni."ID_Compra"
+        LEFT JOIN "Proveedor" prov ON prov."ID_Proveedor" = nc."ID_Proveedor"
+        WHERE ni.deleted_at IS NULL
+        ORDER BY ni."Fecha" DESC
+        LIMIT 500
+      `);
+      pdfBuffer = await this.mailSrv.buildPdfIngresos(rows);
+    } else if (body.reportType === 'EGRESOS') {
+      const rows = await this.prodRepo.manager.query(`
+        SELECT ne."ID_Egreso" as id, ne."Fecha" as fecha,
+               p."Nombre" as producto, de."Cantidad" as cantidad,
+               p."PrecioUnitario" as precio, s."Nombre" as sucursal
+        FROM "NotaEgreso" ne
+        JOIN "DetalleEgreso" de ON de."ID_Egreso" = ne."ID_Egreso"
+        JOIN "Producto" p ON p."ID_Producto" = de."ID_Producto"
+        LEFT JOIN "Sucursal" s ON s."ID_Sucursal" = de."ID_Sucursal"
+        WHERE ne.deleted_at IS NULL
+        ORDER BY ne."Fecha" DESC
+        LIMIT 500
+      `);
+      pdfBuffer = await this.mailSrv.buildPdfEgresos(rows);
     } else {
       throw new BadRequestException('Tipo de Reporte Solicitado es Inválido.');
     }

@@ -274,6 +274,98 @@ export class MailService {
     });
   }
 
+  async buildPdfMermas(rows: any[]): Promise<Buffer> {
+    return new Promise((resolve) => {
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      const buffers: any[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      doc.fontSize(20).text('PARADISO LOGISTICS', { align: 'center' }).moveDown();
+      doc.fontSize(14).text('Reporte de Mermas y Pérdidas de Inventario', { align: 'center' }).moveDown();
+
+      const table = {
+        title: 'Detalle de Mermas Registradas',
+        headers: ['Fecha', 'Motivo', 'Producto', 'Cantidad', 'Pérdida (Bs.)'],
+        rows: rows.map((r) => [
+          new Date(r.fecha).toLocaleDateString(),
+          r.motivo || '—',
+          r.producto,
+          r.cantidad.toString(),
+          `Bs. ${(parseFloat(r.cantidad) * parseFloat(r.precio || 0)).toFixed(2)}`,
+        ]),
+      };
+
+      doc.table(table, {
+        prepareHeader: () => doc.font('Helvetica-Bold').fontSize(10),
+        prepareRow: () => doc.font('Helvetica').fillColor('black').fontSize(10),
+      });
+      doc.end();
+    });
+  }
+
+  async buildPdfIngresos(rows: any[]): Promise<Buffer> {
+    return new Promise((resolve) => {
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      const buffers: any[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      doc.fontSize(20).text('PARADISO LOGISTICS', { align: 'center' }).moveDown();
+      doc.fontSize(14).text('Reporte de Ingresos de Inventario', { align: 'center' }).moveDown();
+
+      const table = {
+        title: 'Notas de Ingreso Registradas',
+        headers: ['Nota', 'Fecha', 'Proveedor', 'Producto', 'Cantidad', 'Valor (Bs.)'],
+        rows: rows.map((r) => [
+          `INC-${String(r.id).padStart(5, '0')}`,
+          new Date(r.fecha).toLocaleDateString(),
+          r.proveedor || '—',
+          r.producto,
+          r.cantidad.toString(),
+          `Bs. ${(parseFloat(r.cantidad) * parseFloat(r.precio || 0)).toFixed(2)}`,
+        ]),
+      };
+
+      doc.table(table, {
+        prepareHeader: () => doc.font('Helvetica-Bold').fontSize(9),
+        prepareRow: () => doc.font('Helvetica').fillColor('black').fontSize(9),
+      });
+      doc.end();
+    });
+  }
+
+  async buildPdfEgresos(rows: any[]): Promise<Buffer> {
+    return new Promise((resolve) => {
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      const buffers: any[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      doc.fontSize(20).text('PARADISO LOGISTICS', { align: 'center' }).moveDown();
+      doc.fontSize(14).text('Reporte de Egresos de Inventario', { align: 'center' }).moveDown();
+
+      const table = {
+        title: 'Notas de Egreso Registradas',
+        headers: ['Nota', 'Fecha', 'Producto', 'Cantidad', 'Sucursal Destino', 'Valor (Bs.)'],
+        rows: rows.map((r) => [
+          `EGR-${String(r.id).padStart(5, '0')}`,
+          new Date(r.fecha).toLocaleDateString(),
+          r.producto,
+          r.cantidad.toString(),
+          r.sucursal || '—',
+          `Bs. ${(parseFloat(r.cantidad) * parseFloat(r.precio || 0)).toFixed(2)}`,
+        ]),
+      };
+
+      doc.table(table, {
+        prepareHeader: () => doc.font('Helvetica-Bold').fontSize(9),
+        prepareRow: () => doc.font('Helvetica').fillColor('black').fontSize(9),
+      });
+      doc.end();
+    });
+  }
+
   async sendReport(
     userId: number,
     email: string,
@@ -282,9 +374,14 @@ export class MailService {
     mensajePersonalizado?: string,
   ) {
     const subjectMap: any = {
-      INVENTARIO: 'Reporte de Inventario Actual - PARADISO',
-      CUENTAS: 'Reporte de Cuentas por Pagar - PARADISO',
-      DESPACHOS: 'Historial de Despachos - PARADISO',
+      INVENTARIO:  'Reporte de Inventario Actual - PARADISO',
+      CUENTAS:     'Reporte de Cuentas por Pagar - PARADISO',
+      DESPACHOS:   'Historial de Despachos - PARADISO',
+      COMPRAS:     'Historial de Órdenes de Compra - PARADISO',
+      PROVEEDORES: 'Directorio de Proveedores - PARADISO',
+      MERMAS:      'Reporte de Mermas y Pérdidas - PARADISO',
+      INGRESOS:    'Reporte de Ingresos de Inventario - PARADISO',
+      EGRESOS:     'Reporte de Egresos de Inventario - PARADISO',
     };
 
     const asunto = subjectMap[reportType] || 'Reporte del Sistema Logístico';
@@ -293,7 +390,10 @@ export class MailService {
       : `A continuación se adjunta el informe renderizado directamente desde el engranaje del Backend Node.js para: ${reportType}.`;
 
     const smtp = await this.resolveSmtpConfig();
-    const remitente = smtp?.user || 'noreply@paradiso.local';
+    const remitente =
+      this.configService.get<string>('MAIL_FROM_ADDRESS') ||
+      smtp?.user ||
+      'noreply@paradiso.local';
 
     const transporter = await this.buildTransporter();
 
